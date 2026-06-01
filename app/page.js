@@ -4,7 +4,117 @@ import { useEffect, useState } from "react";
 
 const example =
   "Babciu, jestem w kłopotach. Potrzebuję szybko 800 zł BLIK-iem. Nie dzwoń, później wszystko wyjaśnię. Mój nowy numer to 600 123 456.";
+function analyzeLinkLocally(rawLink) {
+  const link = rawLink.trim().toLowerCase();
 
+  if (!link) {
+    return {
+      status: "Brak linku",
+      color: "yellow",
+      score: 0,
+      reasons: ["Wklej link, który chcesz sprawdzić."]
+    };
+  }
+
+  const suspiciousWords = [
+    "doplat",
+    "dopłata",
+    "platnosc",
+    "płatność",
+    "payment",
+    "verify",
+    "login",
+    "secure",
+    "konto",
+    "blokada",
+    "odbior",
+    "odbiór",
+    "paczka",
+    "inpost",
+    "bank",
+    "blik"
+  ];
+
+  const trustedDomains = [
+    "inpost.pl",
+    "allegro.pl",
+    "olx.pl",
+    "gov.pl",
+    "mobywatel.gov.pl",
+    "poczta-polska.pl",
+    "pkobp.pl",
+    "mbank.pl",
+    "ing.pl",
+    "santander.pl",
+    "pekao.com.pl"
+  ];
+
+  let domain = "";
+  let reasons = [];
+  let score = 1;
+
+  try {
+    const normalized = link.startsWith("http") ? link : `https://${link}`;
+    const url = new URL(normalized);
+    domain = url.hostname.replace("www.", "");
+  } catch {
+    return {
+      status: "Nieprawidłowy link",
+      color: "red",
+      score: 8,
+      reasons: ["Ten tekst nie wygląda jak poprawny adres strony internetowej."]
+    };
+  }
+
+  const isTrusted = trustedDomains.some((trusted) => domain === trusted || domain.endsWith(`.${trusted}`));
+
+  if (isTrusted) {
+    reasons.push("Domena wygląda jak oficjalna strona znanej instytucji lub firmy.");
+    score = 2;
+  } else {
+    reasons.push("Domena nie znajduje się na liście przykładowych zaufanych domen.");
+    score += 2;
+  }
+
+  if (suspiciousWords.some((word) => link.includes(word))) {
+    reasons.push("Link zawiera słowa często używane w oszustwach, np. płatność, login, paczka lub blokada.");
+    score += 3;
+  }
+
+  if (domain.split(".").length > 3) {
+    reasons.push("Adres ma wiele części przed domeną, co czasem bywa używane do podszywania się pod znane marki.");
+    score += 1;
+  }
+
+  if (domain.includes("-")) {
+    reasons.push("Domena zawiera myślnik. To nie zawsze oznacza oszustwo, ale bywa używane w fałszywych adresach.");
+    score += 1;
+  }
+
+  if (!link.startsWith("https://") && !link.startsWith("http")) {
+    reasons.push("Link nie zawiera początku https://, więc warto zachować ostrożność i nie klikać go bez sprawdzenia.");
+    score += 1;
+  }
+
+  score = Math.min(10, Math.max(1, score));
+
+  const color = score >= 7 ? "red" : score >= 4 ? "yellow" : "green";
+
+  const status =
+    color === "red"
+      ? "Wysokie ryzyko"
+      : color === "yellow"
+      ? "Wymaga ostrożności"
+      : "Niskie ryzyko";
+
+  return {
+    status,
+    color,
+    score,
+    domain,
+    reasons
+  };
+}
 const scamCards = [
   {
     title: "Fałszywa dopłata do paczki",
@@ -22,6 +132,8 @@ const scamCards = [
 
 export default function Home() {
   const [message, setMessage] = useState("");
+const [linkToCheck, setLinkToCheck] = useState("");
+const [linkResult, setLinkResult] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [result, setResult] = useState(null);
@@ -149,7 +261,10 @@ export default function Home() {
     if (!result?.familyMessage) return;
     window.open(`https://wa.me/?text=${encodeURIComponent(result.familyMessage)}`, "_blank");
   }
-
+function checkLink() {
+  const result = analyzeLinkLocally(linkToCheck);
+  setLinkResult(result);
+}
   function clearHistory() {
     setHistory([]);
     localStorage.removeItem("seniorshield-history");
@@ -174,9 +289,10 @@ export default function Home() {
         </div>
 
         <nav>
-          <a href="#sprawdz">Sprawdź</a>
-          <a href="#edukacja">Poradnik</a>
-          <a href="#historia">Historia</a>
+<a href="#sprawdz">Sprawdź</a>
+<a href="#link">Link</a>
+<a href="#faq">FAQ</a>
+<a href="#historia">Historia</a>
         </nav>
       </header>
 
@@ -216,7 +332,68 @@ export default function Home() {
             </div>
           </div>
         </section>
+<section id="link" className="section-card">
+  <div className="section-heading">
+    <p className="eyebrow">Sprawdzanie linku</p>
+    <h2>Wklej sam link do sprawdzenia</h2>
+    <p>
+      Jeśli dostałeś podejrzany link w SMS-ie lub e-mailu, możesz sprawdzić,
+      czy adres wygląda bezpiecznie. To szybka analiza domeny, bez otwierania strony.
+    </p>
+  </div>
 
+  <label htmlFor="linkChecker">Podejrzany link:</label>
+  <input
+    id="linkChecker"
+    className="link-input"
+    value={linkToCheck}
+    onChange={(e) => setLinkToCheck(e.target.value)}
+    placeholder="Np. inpost-doplata24.pl albo https://example.com"
+  />
+
+  <div className="buttons-row">
+    <button className="button primary" onClick={checkLink}>
+      Sprawdź link
+    </button>
+    <button
+      className="button secondary"
+      onClick={() => {
+        setLinkToCheck("inpost-doplata24.pl/platnosc");
+        setLinkResult(null);
+      }}
+    >
+      Wklej przykład
+    </button>
+  </div>
+
+  {linkResult && (
+    <div className={`result ${linkResult.color === "red" ? "red" : linkResult.color === "yellow" ? "orange" : "green"}`}>
+      <h3>{linkResult.status}</h3>
+      <div className="status">Ocena linku — {linkResult.score}/10</div>
+
+      {linkResult.domain && (
+        <p>
+          <strong>Wykryta domena:</strong> {linkResult.domain}
+        </p>
+      )}
+
+      <h4>Dlaczego tak oceniliśmy link?</h4>
+      <ul>
+        {linkResult.reasons.map((reason, index) => (
+          <li key={index}>{reason}</li>
+        ))}
+      </ul>
+
+      <h4>Co zrobić?</h4>
+      <ul>
+        <li>Nie klikaj linku, jeśli nie masz pewności, kto go wysłał.</li>
+        <li>Wejdź na stronę firmy samodzielnie, wpisując jej adres w przeglądarce.</li>
+        <li>Nie podawaj danych karty, loginu, hasła ani kodu SMS.</li>
+        <li>Jeśli link dotyczy banku, zadzwoń na oficjalną infolinię banku.</li>
+      </ul>
+    </div>
+  )}
+</section>
         <section id="sprawdz" className="section-card">
           <div className="section-heading">
             <p className="eyebrow">Analiza AI</p>
@@ -373,7 +550,54 @@ export default function Home() {
             <li>Skopiuj wiadomość do rodziny i poproś o pomoc.</li>
           </ol>
         </section>
+<section id="faq" className="section-card">
+  <div className="section-heading">
+    <p className="eyebrow">FAQ</p>
+    <h2>Najczęstsze pytania</h2>
+    <p>Krótko i prostym językiem.</p>
+  </div>
 
+  <div className="faq-list">
+    <details>
+      <summary>Czy SeniorShield daje stuprocentową pewność?</summary>
+      <p>
+        Nie. Aplikacja ocenia ryzyko na podstawie treści, linków, numerów i widocznych sygnałów.
+        Jeśli masz wątpliwości, skontaktuj się z rodziną, bankiem albo odpowiednią instytucją.
+      </p>
+    </details>
+
+    <details>
+      <summary>Czy mogę wklejać dane bankowe albo PESEL?</summary>
+      <p>
+        Nie. Nie wklejaj haseł, numeru PESEL, danych karty, loginu do banku ani kodów SMS.
+        Do analizy wystarczy treść wiadomości bez wrażliwych danych.
+      </p>
+    </details>
+
+    <details>
+      <summary>Co zrobić, jeśli kliknąłem/am podejrzany link?</summary>
+      <p>
+        Nie podawaj żadnych danych. Jeśli podałeś/aś dane bankowe lub kod, natychmiast skontaktuj się z bankiem.
+        Warto też poinformować bliską osobę i zgłosić podejrzaną wiadomość.
+      </p>
+    </details>
+
+    <details>
+      <summary>Czy mogę wysłać wynik rodzinie?</summary>
+      <p>
+        Tak. Po analizie możesz skopiować gotową wiadomość do rodziny albo otworzyć SMS lub WhatsApp.
+      </p>
+    </details>
+
+    <details>
+      <summary>Czy analiza screena działa tak samo jak analiza tekstu?</summary>
+      <p>
+        System próbuje odczytać tekst widoczny na screenie i ocenić go tak jak zwykłą wiadomość.
+        Jeśli screen jest niewyraźny, wynik może być mniej dokładny.
+      </p>
+    </details>
+  </div>
+</section>
         <section id="historia" className="section-card">
           <div className="section-heading">
             <p className="eyebrow">Historia</p>
