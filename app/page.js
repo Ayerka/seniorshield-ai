@@ -5,19 +5,21 @@ import { useState } from "react";
 const example = "Babciu, jestem w kłopotach. Potrzebuję szybko 800 zł BLIK-iem. Nie dzwoń, później wszystko wyjaśnię. Mój nowy numer to 600 123 456.";
 
 export default function Home() {
-  const [message, setMessage] = useState("");
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+ const [message, setMessage] = useState("");
+const [imagePreview, setImagePreview] = useState("");
+const [imageDataUrl, setImageDataUrl] = useState("");
+const [result, setResult] = useState(null);
+const [loading, setLoading] = useState(false);
+const [error, setError] = useState("");
 
   async function analyze() {
     setError("");
     setResult(null);
 
-    if (!message.trim()) {
-      setError("Najpierw wklej wiadomość do sprawdzenia.");
-      return;
-    }
+    if (!message.trim() && !imageDataUrl) {
+  setError("Najpierw wklej wiadomość albo dodaj screenshot do sprawdzenia.");
+  return;
+}
 
     setLoading(true);
 
@@ -27,7 +29,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message, imageDataUrl })
       });
 
       const data = await response.json();
@@ -43,7 +45,32 @@ export default function Home() {
       setLoading(false);
     }
   }
+function handleImageUpload(event) {
+  const file = event.target.files?.[0];
 
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    setError("Dodany plik musi być obrazem, np. screenshotem SMS-a.");
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    const result = reader.result;
+    setImageDataUrl(result);
+    setImagePreview(result);
+    setError("");
+  };
+
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  setImageDataUrl("");
+  setImagePreview("");
+}
   const riskClass =
     result?.riskColor === "red" ? "red" :
     result?.riskColor === "yellow" ? "orange" :
@@ -107,7 +134,24 @@ export default function Home() {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Np. „Babciu, pilnie wyślij mi kod BLIK. Nie mogę teraz rozmawiać.”"
           />
+<label htmlFor="screenshot">Albo dodaj screenshot wiadomości:</label>
 
+<input
+  id="screenshot"
+  type="file"
+  accept="image/*"
+  onChange={handleImageUpload}
+/>
+
+{imagePreview && (
+  <div className="image-preview-box">
+    <p>Dodany screenshot:</p>
+    <img src={imagePreview} alt="Podgląd dodanego screenshota" />
+    <button className="button secondary" onClick={removeImage}>
+      Usuń screenshot
+    </button>
+  </div>
+)}
           <p className="privacy-note">
             Nie wpisuj tutaj haseł, numerów PESEL, danych karty ani loginów do banku.
           </p>
@@ -116,9 +160,16 @@ export default function Home() {
             <button className="button primary" onClick={analyze} disabled={loading}>
               {loading ? "Analizujemy..." : "Sprawdź teraz"}
             </button>
-            <button className="button secondary" onClick={() => setMessage(example)}>
-              Wklej przykład
-            </button>
+            <button
+  className="button secondary"
+  onClick={() => {
+    setMessage(example);
+    setImageDataUrl("");
+    setImagePreview("");
+  }}
+>
+  Wklej przykład
+</button>
           </div>
 
           {error && <p className="error">{error}</p>}

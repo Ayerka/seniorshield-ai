@@ -49,11 +49,11 @@ function ruleBasedSignals(text, phones, links) {
 
 export async function POST(request) {
   try {
-    const { message } = await request.json();
+    const { message, imageDataUrl } = await request.json();
 
-    if (!message || typeof message !== "string") {
-      return Response.json({ error: "Brak wiadomości do analizy." }, { status: 400 });
-    }
+    if ((!message || typeof message !== "string") && !imageDataUrl) {
+  return Response.json({ error: "Brak wiadomości lub screenshota do analizy." }, { status: 400 });
+}
 
     if (!process.env.OPENAI_API_KEY) {
       return Response.json(
@@ -62,17 +62,24 @@ export async function POST(request) {
       );
     }
 
-    const detectedLinks = extractLinks(message);
-    const detectedPhones = extractPhones(message);
-    const localSignals = ruleBasedSignals(message, detectedPhones, detectedLinks);
+    const textForRules = message || "";
+const detectedLinks = extractLinks(textForRules);
+const detectedPhones = extractPhones(textForRules);
+const localSignals = ruleBasedSignals(textForRules, detectedPhones, detectedLinks);
 
     const prompt = `
-Przeanalizuj wiadomość pod kątem oszustwa internetowego skierowanego do seniorów.
+const prompt = `
+Przeanalizuj wiadomość albo screenshot pod kątem oszustwa internetowego skierowanego do seniorów.
 
-Wiadomość:
-${message}
+Jeśli dodano screenshot:
+1. Najpierw odczytaj tekst widoczny na obrazie.
+2. Następnie oceń, czy treść wygląda na scam, phishing, podszywanie się pod bank, kuriera, sklep, pracodawcę albo bliską osobę.
+3. W odpowiedzi uwzględnij, że analiza opiera się na treści widocznej na screenie.
 
-Dodatkowo wykryte elementy:
+Wiadomość wpisana ręcznie:
+${message || "brak"}
+
+Dodatkowo wykryte elementy z tekstu wpisanego ręcznie:
 - Numery telefonu: ${detectedPhones.length ? detectedPhones.join(", ") : "brak"}
 - Linki: ${detectedLinks.length ? detectedLinks.join(", ") : "brak"}
 - Sygnały regułowe: ${localSignals.length ? localSignals.join("; ") : "brak"}
@@ -83,16 +90,28 @@ Pisz bardzo prostym językiem, jak do osoby starszej.
 Nie twierdź, że coś jest na pewno oszustwem, jeżeli nie ma pewności.
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Jesteś ostrożnym asystentem cyberbezpieczeństwa dla seniorów. Oceniasz ryzyko scamów, phishingu, podszywania się pod rodzinę, bank, kuriera i próśb o pieniądze. Zawsze dajesz praktyczne, bezpieczne kroki."
-        },
-        { role: "user", content: prompt }
-      ],
+    const userContent = imageDataUrl
+  ? [
+      { type: "text", text: prompt },
+      {
+        type: "image_url",
+        image_url: {
+          url: imageDataUrl
+        }
+      }
+    ]
+  : prompt;
+
+const completion = await openai.chat.completions.create({
+  model: "gpt-4.1-mini",
+  messages: [
+    {
+      role: "system",
+      content:
+        "Jesteś ostrożnym asystentem cyberbezpieczeństwa dla seniorów. Oceniasz ryzyko scamów, phishingu, podszywania się pod rodzinę, bank, kuriera, sklepy, pracodawców i próśb o pieniądze. Potrafisz analizować tekst oraz screenshoty wiadomości. Zawsze dajesz praktyczne, bezpieczne kroki."
+    },
+    { role: "user", content: userContent }
+  ],
       response_format: {
         type: "json_schema",
         json_schema: {
