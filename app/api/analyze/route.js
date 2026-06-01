@@ -89,9 +89,32 @@ Użytkownik może wkleić:
 - zdjęcie.
 
 WAŻNE:
-Nie mów, że coś jest na pewno wygenerowane przez AI.
+Nie jesteś zwykłym opisującym obraz. Twoim głównym zadaniem jest wykrywanie manipulacji, deepfake, fake newsów i możliwych treści AI.
+
+Nie mów, że coś jest na pewno wygenerowane przez AI, jeśli nie ma pewności.
 Używaj sformułowań: "może być", "wygląda podejrzanie", "wymaga sprawdzenia".
-Jeśli analizujesz obraz, opisz, co na nim widzisz i jakie są sygnały ostrzegawcze.
+
+Jeśli analizujesz obraz, sprawdzaj szczególnie:
+- nienaturalnie idealną kompozycję,
+- powtarzalne wzory,
+- dziwne detale architektury,
+- nielogiczne światło i cienie,
+- zniekształcone napisy,
+- nienaturalne dłonie, twarze, oczy,
+- elementy, które wyglądają dekoracyjnie, ale fizycznie są mało realne,
+- obraz wyglądający jak viralowy post, clickbait albo wygenerowana grafika.
+
+Jeśli obraz wygląda estetycznie, bajkowo, zbyt idealnie lub viralowo, NIE dawaj automatycznie zielonego wyniku.
+W takiej sytuacji ustaw co najmniej:
+riskScore: 5
+riskColor: "yellow"
+riskLabel: "Wymaga sprawdzenia"
+aiLikelihood: "możliwe użycie AI lub obróbki"
+credibility: "niepotwierdzone — wymaga sprawdzenia w innych źródłach"
+
+Zielony wynik możesz dać tylko wtedy, gdy obraz wygląda naturalnie i nie ma widocznych sygnałów manipulacji.
+Jeśli nie możesz potwierdzić źródła zdjęcia, napisz to wprost.
+
 Jeśli podano tylko link, zaznacz, że nie pobierasz automatycznie treści posta i najlepiej dodać screenshot lub wkleić opis.
 
 Treść wpisana przez użytkownika:
@@ -198,7 +221,7 @@ export async function POST(request) {
           role: "system",
           content:
             mode === "ai_content"
-              ? "Jesteś ostrożnym asystentem fact-checkingu i bezpieczeństwa cyfrowego dla seniorów. Analizujesz treści, posty, screenshoty i zdjęcia pod kątem manipulacji, fake newsów, clickbaitu oraz możliwego użycia AI. Nigdy nie twierdzisz, że coś jest na pewno wygenerowane przez AI, jeśli nie ma pewności."
+              ? "Jesteś bardzo ostrożnym asystentem fact-checkingu i bezpieczeństwa cyfrowego dla seniorów. Analizujesz posty, screenshoty i zdjęcia pod kątem manipulacji, fake newsów, clickbaitu, deepfake oraz możliwego użycia AI. Przy obrazach viralowych, bajkowych, zbyt idealnych lub bez potwierdzonego źródła nie dawaj zielonego wyniku. Minimum to żółte ostrzeżenie i sugestia sprawdzenia w innych źródłach. Nigdy nie twierdzisz, że coś jest na pewno wygenerowane przez AI, jeśli nie ma pewności."
               : "Jesteś ostrożnym asystentem cyberbezpieczeństwa dla seniorów. Oceniasz ryzyko scamów, phishingu, podszywania się pod rodzinę, bank, kuriera, sklepy, pracodawców i próśb o pieniądze. Potrafisz analizować tekst oraz screenshoty wiadomości. Zawsze dajesz praktyczne, bezpieczne kroki."
         },
         { role: "user", content: userContent }

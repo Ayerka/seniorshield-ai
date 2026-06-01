@@ -377,8 +377,41 @@ export default function Home() {
     localStorage.setItem("seniorshield-history", JSON.stringify(updatedHistory));
   }
 
+
+  function fileToJpegDataUrl(file, callback) {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxWidth = 1200;
+        const scale = Math.min(1, maxWidth / img.width);
+
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        callback(jpegDataUrl);
+      };
+
+      img.onerror = () => {
+        setError("Nie udało się odczytać obrazu. Spróbuj dodać inny screenshot albo zdjęcie.");
+      };
+
+      img.src = reader.result;
+    };
+
+    reader.readAsDataURL(file);
+  }
+
   function handleImageUpload(event) {
     const file = event.target.files?.[0];
+
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
@@ -386,19 +419,16 @@ export default function Home() {
       return;
     }
 
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      setImageDataUrl(reader.result);
-      setImagePreview(reader.result);
+    fileToJpegDataUrl(file, (jpegDataUrl) => {
+      setImageDataUrl(jpegDataUrl);
+      setImagePreview(jpegDataUrl);
       setError("");
-    };
-
-    reader.readAsDataURL(file);
+    });
   }
 
   function handleAiImageUpload(event) {
     const file = event.target.files?.[0];
+
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
@@ -406,15 +436,11 @@ export default function Home() {
       return;
     }
 
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      setAiImageDataUrl(reader.result);
-      setAiImagePreview(reader.result);
+    fileToJpegDataUrl(file, (jpegDataUrl) => {
+      setAiImageDataUrl(jpegDataUrl);
+      setAiImagePreview(jpegDataUrl);
       setError("");
-    };
-
-    reader.readAsDataURL(file);
+    });
   }
 
   function checkLink() {
