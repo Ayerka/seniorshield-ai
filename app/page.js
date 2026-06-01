@@ -453,17 +453,6 @@ function handleAiImageUpload(event) {
   });
 }
 
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      setAiImageDataUrl(reader.result);
-      setAiImagePreview(reader.result);
-      setError("");
-    };
-
-    reader.readAsDataURL(file);
-  }
-
   function checkLink() {
     setError("");
     setLinkResult(analyzeLinkLocally(linkToCheck));
