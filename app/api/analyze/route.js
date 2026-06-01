@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 
-
 function extractLinks(text) {
   const matches = text.match(/https?:\/\/[^\s]+|www\.[^\s]+/gi);
   return matches ? [...new Set(matches)] : [];
@@ -35,7 +34,9 @@ function ruleBasedSignals(text, phones, links) {
   ];
 
   for (const [pattern, reason] of patterns) {
-    if (pattern.test(text)) signals.push(reason);
+    if (pattern.test(text)) {
+      signals.push(reason);
+    }
   }
 
   if (links.length) signals.push("Wiadomość zawiera link.");
@@ -44,29 +45,70 @@ function ruleBasedSignals(text, phones, links) {
   return [...new Set(signals)];
 }
 
-export async function POST(request) {
-  try {
-    const { message, imageDataUrl } = await request.json();
+function normalizeRiskScore(value) {
+  const number = Number(value);
 
-    if ((!message || typeof message !== "string") && !imageDataUrl) {
-  return Response.json({ error: "Brak wiadomości lub screenshota do analizy." }, { status: 400 });
+  if (!Number.isFinite(number)) return 5;
+
+  if (number > 10) {
+    return Math.max(1, Math.min(10, Math.round(number / 10)));
+  }
+
+  return Math.max(1, Math.min(10, Math.round(number)));
 }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return Response.json(
-        { error: "Brakuje OPENAI_API_KEY w pliku .env.local." },
-        { status: 500 }
-      );
-    }
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-    const textForRules = message || "";
-const detectedLinks = extractLinks(textForRules);
-const detectedPhones = extractPhones(textForRules);
-const localSignals = ruleBasedSignals(textForRules, detectedPhones, detectedLinks);
+function getRiskColor(score) {
+  if (score >= 7) return "red";
+  if (score >= 4) return "yellow";
+  return "green";
+}
 
-const prompt = `
+function getRiskLabel(color, mode) {
+  if (mode === "ai_content") {
+    if (color === "red") return "Wysokie ryzyko manipulacji";
+    if (color === "yellow") return "Wymaga sprawdzenia";
+    return "Niskie ryzyko manipulacji";
+  }
+
+  if (color === "red") return "Wysokie ryzyko oszustwa";
+  if (color === "yellow") return "Średnie ryzyko";
+  return "Niskie ryzyko";
+}
+
+function buildPrompt({ mode, message, postLink, detectedPhones, detectedLinks, localSignals }) {
+  if (mode === "ai_content") {
+    return `
+Przeanalizuj treść, screenshot, zdjęcie albo link do posta pod kątem manipulacji, fake newsa i możliwego użycia AI.
+
+Użytkownik może wkleić:
+- treść posta,
+- opis filmu,
+- nagłówek,
+- link do TikToka, Facebooka, Instagrama albo artykułu,
+- screenshot posta,
+- zdjęcie.
+
+WAŻNE:
+Nie mów, że coś jest na pewno wygenerowane przez AI.
+Używaj sformułowań: "może być", "wygląda podejrzanie", "wymaga sprawdzenia".
+Jeśli analizujesz obraz, opisz, co na nim widzisz i jakie są sygnały ostrzegawcze.
+Jeśli podano tylko link, zaznacz, że nie pobierasz automatycznie treści posta i najlepiej dodać screenshot lub wkleić opis.
+
+Treść wpisana przez użytkownika:
+${message || "brak"}
+
+Link do posta lub strony:
+${postLink || "brak"}
+
+Wykryte linki:
+${detectedLinks.length ? detectedLinks.join(", ") : "brak"}
+
+Zwróć wyłącznie JSON zgodny ze schematem.
+Pisz prostym językiem dla seniora.
+`;
+  }
+
+  return `
 Przeanalizuj wiadomość albo screenshot pod kątem oszustwa internetowego skierowanego do seniorów.
 
 Jeśli dodano screenshot:
@@ -87,33 +129,84 @@ Nie strasz użytkownika bez powodu.
 Pisz bardzo prostym językiem, jak do osoby starszej.
 Nie twierdź, że coś jest na pewno oszustwem, jeżeli nie ma pewności.
 `;
+}
+
+export async function POST(request) {
+  try {
+    const {
+      mode = "scam",
+      message = "",
+      imageDataUrl = "",
+      postLink = ""
+    } = await request.json();
+
+    if (!process.env.OPENAI_API_KEY) {
+      return Response.json(
+        { error: "Brakuje OPENAI_API_KEY w ustawieniach środowiska." },
+        { status: 500 }
+      );
+    }
+
+    if (mode === "scam" && !message.trim() && !imageDataUrl) {
+      return Response.json(
+        { error: "Brak wiadomości lub screenshota do analizy." },
+        { status: 400 }
+      );
+    }
+
+    if (mode === "ai_content" && !message.trim() && !imageDataUrl && !postLink.trim()) {
+      return Response.json(
+        { error: "Dodaj tekst, screenshot, zdjęcie albo link do posta." },
+        { status: 400 }
+      );
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+
+    const textForRules = `${message || ""} ${postLink || ""}`;
+    const detectedLinks = extractLinks(textForRules);
+    const detectedPhones = extractPhones(textForRules);
+    const localSignals = ruleBasedSignals(textForRules, detectedPhones, detectedLinks);
+
+    const prompt = buildPrompt({
+      mode,
+      message,
+      postLink,
+      detectedPhones,
+      detectedLinks,
+      localSignals
+    });
 
     const userContent = imageDataUrl
-  ? [
-      { type: "text", text: prompt },
-      {
-        type: "image_url",
-        image_url: {
-          url: imageDataUrl
-        }
-      }
-    ]
-  : prompt;
+      ? [
+          { type: "text", text: prompt },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageDataUrl
+            }
+          }
+        ]
+      : prompt;
 
-const completion = await openai.chat.completions.create({
-  model: "gpt-4.1-mini",
-  messages: [
-    {
-      role: "system",
-      content:
-        "Jesteś ostrożnym asystentem cyberbezpieczeństwa dla seniorów. Oceniasz ryzyko scamów, phishingu, podszywania się pod rodzinę, bank, kuriera, sklepy, pracodawców i próśb o pieniądze. Potrafisz analizować tekst oraz screenshoty wiadomości. Zawsze dajesz praktyczne, bezpieczne kroki."
-    },
-    { role: "user", content: userContent }
-  ],
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            mode === "ai_content"
+              ? "Jesteś ostrożnym asystentem fact-checkingu i bezpieczeństwa cyfrowego dla seniorów. Analizujesz treści, posty, screenshoty i zdjęcia pod kątem manipulacji, fake newsów, clickbaitu oraz możliwego użycia AI. Nigdy nie twierdzisz, że coś jest na pewno wygenerowane przez AI, jeśli nie ma pewności."
+              : "Jesteś ostrożnym asystentem cyberbezpieczeństwa dla seniorów. Oceniasz ryzyko scamów, phishingu, podszywania się pod rodzinę, bank, kuriera, sklepy, pracodawców i próśb o pieniądze. Potrafisz analizować tekst oraz screenshoty wiadomości. Zawsze dajesz praktyczne, bezpieczne kroki."
+        },
+        { role: "user", content: userContent }
+      ],
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "senior_scam_analysis",
+          name: "senior_safety_analysis",
           schema: {
             type: "object",
             additionalProperties: false,
@@ -123,6 +216,9 @@ const completion = await openai.chat.completions.create({
               riskLabel: { type: "string" },
               title: { type: "string" },
               simpleExplanation: { type: "string" },
+              contentType: { type: "string" },
+              aiLikelihood: { type: "string" },
+              credibility: { type: "string" },
               reasons: {
                 type: "array",
                 items: { type: "string" }
@@ -139,6 +235,9 @@ const completion = await openai.chat.completions.create({
               "riskLabel",
               "title",
               "simpleExplanation",
+              "contentType",
+              "aiLikelihood",
+              "credibility",
               "reasons",
               "actions",
               "familyMessage"
@@ -150,34 +249,23 @@ const completion = await openai.chat.completions.create({
 
     const aiResult = JSON.parse(completion.choices[0].message.content);
 
-const safeRiskScore = Math.max(
-  1,
-  Math.min(10, Number(aiResult.riskScore) > 10 ? Math.round(Number(aiResult.riskScore) / 10) : Number(aiResult.riskScore))
-);
+    const safeRiskScore = normalizeRiskScore(aiResult.riskScore);
+    const safeRiskColor = getRiskColor(safeRiskScore);
+    const safeRiskLabel = getRiskLabel(safeRiskColor, mode);
 
-const safeRiskColor =
-  safeRiskScore >= 7 ? "red" :
-  safeRiskScore >= 4 ? "yellow" :
-  "green";
-
-const safeRiskLabel =
-  safeRiskColor === "red" ? "Wysokie ryzyko oszustwa" :
-  safeRiskColor === "yellow" ? "Średnie ryzyko" :
-  "Niskie ryzyko";
-
-return Response.json({
-  ...aiResult,
-  riskScore: safeRiskScore,
-  riskColor: safeRiskColor,
-  riskLabel: safeRiskLabel,
-  detectedLinks,
-  detectedPhones,
-  localSignals
-});
+    return Response.json({
+      ...aiResult,
+      riskScore: safeRiskScore,
+      riskColor: safeRiskColor,
+      riskLabel: safeRiskLabel,
+      detectedLinks,
+      detectedPhones,
+      localSignals
+    });
   } catch (error) {
     console.error(error);
     return Response.json(
-      { error: "Wystąpił błąd podczas analizy wiadomości." },
+      { error: "Wystąpił błąd podczas analizy." },
       { status: 500 }
     );
   }
