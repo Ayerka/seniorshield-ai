@@ -66,7 +66,6 @@ const detectedLinks = extractLinks(textForRules);
 const detectedPhones = extractPhones(textForRules);
 const localSignals = ruleBasedSignals(textForRules, detectedPhones, detectedLinks);
 
-    const prompt = `
 const prompt = `
 Przeanalizuj wiadomość albo screenshot pod kątem oszustwa internetowego skierowanego do seniorów.
 
