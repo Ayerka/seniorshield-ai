@@ -1,9 +1,6 @@
 import OpenAI from "openai";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
 
 function extractLinks(text) {
   const matches = text.match(/https?:\/\/[^\s]+|www\.[^\s]+/gi);
@@ -61,7 +58,9 @@ export async function POST(request) {
         { status: 500 }
       );
     }
-
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
     const textForRules = message || "";
 const detectedLinks = extractLinks(textForRules);
 const detectedPhones = extractPhones(textForRules);
