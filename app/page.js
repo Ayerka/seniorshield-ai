@@ -378,21 +378,13 @@ export default function Home() {
   }
 
   function handleImageUpload(event) {
-  const file = event.target.files?.[0];
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  if (!file) return;
-
-  if (!file.type.startsWith("image/")) {
-    setError("Dodany plik musi być obrazem, np. screenshotem SMS-a.");
-    return;
-  }
-
-  fileToJpegDataUrl(file, (jpegDataUrl) => {
-    setImageDataUrl(jpegDataUrl);
-    setImagePreview(jpegDataUrl);
-    setError("");
-  });
-}
+    if (!file.type.startsWith("image/")) {
+      setError("Dodany plik musi być obrazem, np. screenshotem SMS-a.");
+      return;
+    }
 
     const reader = new FileReader();
 
@@ -405,53 +397,25 @@ export default function Home() {
     reader.readAsDataURL(file);
   }
 
-  function fileToJpegDataUrl(file, callback) {
-  const reader = new FileReader();
+  function handleAiImageUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  reader.onload = () => {
-    const img = new Image();
+    if (!file.type.startsWith("image/")) {
+      setError("Dodany plik musi być obrazem, np. screenshotem posta albo zdjęciem.");
+      return;
+    }
 
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const maxWidth = 1200;
-      const scale = Math.min(1, maxWidth / img.width);
+    const reader = new FileReader();
 
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-      const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      callback(jpegDataUrl);
+    reader.onload = () => {
+      setAiImageDataUrl(reader.result);
+      setAiImagePreview(reader.result);
+      setError("");
     };
 
-    img.onerror = () => {
-      setError("Nie udało się odczytać obrazu. Spróbuj dodać inny screenshot.");
-    };
-
-    img.src = reader.result;
-  };
-
-  reader.readAsDataURL(file);
-}
-
-function handleAiImageUpload(event) {
-  const file = event.target.files?.[0];
-
-  if (!file) return;
-
-  if (!file.type.startsWith("image/")) {
-    setError("Dodany plik musi być obrazem, np. screenshotem posta albo zdjęciem.");
-    return;
+    reader.readAsDataURL(file);
   }
-
-  fileToJpegDataUrl(file, (jpegDataUrl) => {
-    setAiImageDataUrl(jpegDataUrl);
-    setAiImagePreview(jpegDataUrl);
-    setError("");
-  });
-}
 
   function checkLink() {
     setError("");
