@@ -133,12 +133,30 @@ Nie twierdź, że coś jest na pewno oszustwem, jeżeli nie ma pewności.
 
     const aiResult = JSON.parse(completion.choices[0].message.content);
 
-    return Response.json({
-      ...aiResult,
-      detectedLinks,
-      detectedPhones,
-      localSignals
-    });
+const safeRiskScore = Math.max(
+  1,
+  Math.min(10, Number(aiResult.riskScore) > 10 ? Math.round(Number(aiResult.riskScore) / 10) : Number(aiResult.riskScore))
+);
+
+const safeRiskColor =
+  safeRiskScore >= 7 ? "red" :
+  safeRiskScore >= 4 ? "yellow" :
+  "green";
+
+const safeRiskLabel =
+  safeRiskColor === "red" ? "Wysokie ryzyko oszustwa" :
+  safeRiskColor === "yellow" ? "Średnie ryzyko" :
+  "Niskie ryzyko";
+
+return Response.json({
+  ...aiResult,
+  riskScore: safeRiskScore,
+  riskColor: safeRiskColor,
+  riskLabel: safeRiskLabel,
+  detectedLinks,
+  detectedPhones,
+  localSignals
+});
   } catch (error) {
     console.error(error);
     return Response.json(
