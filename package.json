@@ -5,11 +5,11 @@
     "start": "next start"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
+    "libphonenumber-js": "latest",
     "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
     "openai": "latest",
-    "libphonenumber-js": "latest"
-  },
-  "devDependencies": {}
+    "react": "latest",
+    "react-dom": "latest"
+  }
 }
